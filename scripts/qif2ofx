@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+from qif2ofx import qif2ofx
+
+qif2ofx.main()
