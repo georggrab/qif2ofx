@@ -33,6 +33,30 @@ def qif_to_stmttrn(qif_file):
         ))
     return stmttrns
 
+def genofx(qif_file, currency, acctid, trnuid, org, balance):
+    trans = qif_to_stmttrn(qif_file)
+
+    balamt = Decimal(balance) + qif.balance()
+    ledgerbal = m.LEDGERBAL(balamt=balamt,
+        dtasof=qif.last_transaction_date())
+    ccacctfrom = m.CCACCTFROM(acctid=acctid)  # OFX Section 11.3.1
+    banktranlist = m.BANKTRANLIST(*trans, dtstart=datetime(2019,1,1,12,tzinfo=UTC),dtend=datetime(2018,1,1,12,tzinfo=UTC))
+    status = m.STATUS(code=0, severity='INFO')
+    ccstmtrs = m.CCSTMTRS(curdef=currency, ccacctfrom=ccacctfrom, banktranlist=banktranlist, ledgerbal=ledgerbal)
+    ccstmttrnrs = m.CCSTMTTRNRS(trnuid=trnuid, status=status, ccstmtrs=ccstmtrs)        
+    ccmsgsrsv1 = m.CREDITCARDMSGSRSV1(ccstmttrnrs)
+    fi = m.FI(org=org, fid='666')  # Required for Quicken compatibility
+    sonrs = m.SONRS(status=status,
+                  dtserver=datetime.now(tz=UTC),
+                  language='ENG', fi=fi)
+    signonmsgs = m.SIGNONMSGSRSV1(sonrs=sonrs)
+    ofx = m.OFX(signonmsgsrsv1=signonmsgs, creditcardmsgsrsv1=ccmsgsrsv1)
+    root = ofx.to_etree()
+    message = ET.tostring(root).decode()
+    header = str(make_header(version=220))
+
+    return header + message
+
 def main():
     parser = argparse.ArgumentParser('qif2ofx')
     parser.add_argument('--glob', required=True, help='Glob expression for QIF files, for example "./data/**/*.qif"')
@@ -45,27 +69,12 @@ def main():
     args = parser.parse_args()
 
     qif = QIFFile.parse_files(args.glob)
-    trans = qif_to_stmttrn(qif)
-
-    balamt = Decimal(args.balance) + qif.balance()
-    ledgerbal = m.LEDGERBAL(balamt=balamt,
-                          dtasof=qif.last_transaction_date()
-                          )
-    ccacctfrom = m.CCACCTFROM(acctid=args.acctid)  # OFX Section 11.3.1
-    banktranlist = m.BANKTRANLIST(*trans, dtstart=datetime(2019,1,1,12,tzinfo=UTC),dtend=datetime(2018,1,1,12,tzinfo=UTC))
-    status = m.STATUS(code=0, severity='INFO')
-    ccstmtrs = m.CCSTMTRS(curdef=args.currency, ccacctfrom=ccacctfrom, banktranlist=banktranlist, ledgerbal=ledgerbal)
-    ccstmttrnrs = m.CCSTMTTRNRS(trnuid=args.trnuid, status=status, ccstmtrs=ccstmtrs)        
-    ccmsgsrsv1 = m.CREDITCARDMSGSRSV1(ccstmttrnrs)
-    fi = m.FI(org=args.org, fid='666')  # Required for Quicken compatibility
-    sonrs = m.SONRS(status=status,
-                  dtserver=datetime.now(tz=UTC),
-                  language='ENG', fi=fi)
-    signonmsgs = m.SIGNONMSGSRSV1(sonrs=sonrs)
-    ofx = m.OFX(signonmsgsrsv1=signonmsgs, creditcardmsgsrsv1=ccmsgsrsv1)
-    root = ofx.to_etree()
-    message = ET.tostring(root).decode()
-    header = str(make_header(version=220))
-
-    print(header+message)
+    print(genofx(
+        qif,
+        args.currency,
+        args.acctid,
+        args.trnuid,
+        args.org,
+        args.balance
+    ))
     
