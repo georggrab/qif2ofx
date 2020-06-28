@@ -13,6 +13,7 @@ from decimal import Decimal
 from datetime import datetime
 
 import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 from .qif import QIFFile
 
@@ -29,16 +30,17 @@ def qif_to_stmttrn(qif_file):
             fitid=fitid,
             trnamt=trnamt,
             trntype=trntype,
-            name=name
+            name=name,
+            memo=transaction.reference
         ))
     return stmttrns
 
 def genofx(qif_file, currency, acctid, trnuid, org, balance):
     trans = qif_to_stmttrn(qif_file)
 
-    balamt = Decimal(balance) + qif.balance()
+    balamt = Decimal(balance) + qif_file.balance()
     ledgerbal = m.LEDGERBAL(balamt=balamt,
-        dtasof=qif.last_transaction_date())
+        dtasof=qif_file.last_transaction_date())
     ccacctfrom = m.CCACCTFROM(acctid=acctid)  # OFX Section 11.3.1
     banktranlist = m.BANKTRANLIST(*trans, dtstart=datetime(2019,1,1,12,tzinfo=UTC),dtend=datetime(2018,1,1,12,tzinfo=UTC))
     status = m.STATUS(code=0, severity='INFO')
@@ -53,9 +55,10 @@ def genofx(qif_file, currency, acctid, trnuid, org, balance):
     ofx = m.OFX(signonmsgsrsv1=signonmsgs, creditcardmsgsrsv1=ccmsgsrsv1)
     root = ofx.to_etree()
     message = ET.tostring(root).decode()
+    pretty_message = minidom.parseString(message).toprettyxml()
     header = str(make_header(version=220))
 
-    return header + message
+    return header + pretty_message
 
 def main():
     parser = argparse.ArgumentParser('qif2ofx')

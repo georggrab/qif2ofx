@@ -31,6 +31,9 @@ class QIFEntry:
     # Year can be either 4 digits or 2 digits or '6 (=2006). 
     date: datetime
 
+    # Free text, not used in QIF
+    reference: str
+
     @staticmethod
     def parse(raw_transaction: List[str]):
         amount = None
@@ -46,7 +49,7 @@ class QIFEntry:
                 amount = amount * -1
             elif line.startswith('D'):
                 date = parser.parse(line[1:].strip(), dayfirst=True, yearfirst=True).replace(tzinfo=UTC)
-        return QIFEntry(amount, payee, date)
+        return QIFEntry(amount, payee, date, None)
 
 @dataclass
 class QIFFile:
